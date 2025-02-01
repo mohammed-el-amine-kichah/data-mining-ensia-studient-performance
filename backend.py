@@ -1,34 +1,37 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 import pandas as pd
 import joblib
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+
+
+
 
 # Example form data (replace with actual form data)
 form_data = {
     'gender': 'Male',
-    'year_of_study': 'First year',
-    'bac_specialty': 'Mathematics',
-    'study_place': "In your room (dorms)",
-    'study_preference': 'Alone',
-    'learning_methods': 'Reading,Practice',
-    'resources_used': 'Books,Online courses',
-    'use_planner': 'Yes',
-    'problems': 'Lack of time',
-    'second_problem': 'Pressure',
-    'third_problem': 'Private life problems',
-    'satisfaction_with_program': 0,
-    'external_activities': 'No',
-    'motivation_for_joining': 0,
-    'interest_in_ai': 0,
-    'feedback_influence': 'Positively',
-    'sleep_hours': '8 hours or more',
-    'stress_handling': 9,
-    'english_level': 9,
-    'programming_level': 1,
-    'cs_level': 1,
-    'math_level': 1,
-    'study_hours_start': 41,
-    'study_hours_end': 60
+    'year_of_study': 'Second year',
+    'bac_specialty': 'Science',
+    'study_place': "At home",
+    'study_preference': 'With a group',
+    'learning_methods': 'Interactive_workshops,Mind_mapping_and_visualization',
+    'resources_used': 'YouTube_videos,Online_documents',
+    'use_planner': 'No',
+    'problems': 'Bad quality of internet',
+    'second_problem': 'Teachers\' teaching method',
+    'third_problem': 'Not having a good (powerful) computer',
+    'satisfaction_with_program': 3,
+    'external_activities': 'Yes',
+    'motivation_for_joining': 7,
+    'interest_in_ai': 8,
+    'feedback_influence': 'Negatively',
+    'sleep_hours': '5-7 hours',
+    'stress_handling': 7,
+    'english_level': 8,
+    'programming_level': 5,
+    'cs_level': 7,
+    'math_level': 6,
+    'study_hours': '20-30'
 }
 
 # Mapping dictionaries (same as used during preprocessing)
@@ -41,6 +44,11 @@ planer_mapping = {'No': 0, 'Yes': 1}
 problems_mapping = {'Teaching language': 1, 'Bad quality of internet': 2, 'Lack of time': 3, 'Lack of previous knowledge or experience in the field': 4, 'Teachers\' teaching method': 5, 'Pressure': 6, 'Not having a good (powerful) computer': 7, 'Private life problems': 8}
 feedback_mapping = {'You do not care about': 0, 'Positively': 1, 'Negatively': 2}
 sleep_mapping = {'5-7 hours': 6, '8 hours or more': 8, '4 hours or less': 2}
+
+# Split study hours into start and end
+lat_long = form_data['study_hours'].split("-")
+form_data['study_hours_start'] = int(lat_long[0])
+form_data['study_hours_end'] = int(lat_long[1])
 
 # Preprocess the form data
 preprocessed_data = {
@@ -71,7 +79,7 @@ preprocessed_data = {
 # Add learning methods and resources used
 learning_methods = ['Asking_friends','Interactive_workshops', 'Learning_by_practicing',
        'Mind_mapping_and_visualization']
-resources_used = ['Lectures', 'Mind mapping and visualization', 'Books',
+resources_used = ['Lectures', 'Books',
        'Online_courses_and_tutorials', 'Project_based_learning', 'ChatGpt',
        'Course_material', 'Mentors', 'Online_documents', 'YouTube_videos',
        ]
@@ -82,11 +90,25 @@ for method in learning_methods:
 for resource in resources_used:
     preprocessed_data[resource] = 1 if resource in form_data['resources_used'] else 0
 
-# Convert to DataFrame
-form_df = pd.DataFrame([preprocessed_data])
+# Define the column order
+column_order = ['gender', 'year_of_study', 'bac_specialty', 'study_place',
+       'study_preference', 'use_planner', 'problems', 'second_problem',
+       'third_problem', 'satisfaction_with_program', 'external_activities',
+       'motivation_for_joining', 'interest_in_ai', 'feedback_influence',
+       'sleep_hours', 'stress_handling', 'english_level', 'programming_level',
+       'cs_level', 'math_level', 'study_hours_start', 'study_hours_end',
+       'Lectures', 'Books',
+       'Online_courses_and_tutorials', 'Project_based_learning', 'ChatGpt',
+       'Course_material', 'Mentors', 'Online_documents', 'YouTube_videos',
+       'Asking_friends', 'Interactive_workshops', 'Learning_by_practicing',
+       'Mind_mapping_and_visualization']
+
+# Convert to DataFrame with specified column order
+form_df = pd.DataFrame([preprocessed_data], columns=column_order)
 
 # Predict using the best decision tree model
 best_dt = joblib.load('best_decision_tree_model.pkl')
+
 prediction = best_dt.predict(form_df)
 
 print("Predicted 1Y_avg:", prediction[0])
@@ -115,12 +137,16 @@ class FormData(BaseModel):
     programming_level: int
     cs_level: int
     math_level: int
-    study_hours_start: int
-    study_hours_end: int
+    study_hours: str
 
 @app.post("/predict")
 def predict(form_data: FormData):
     try:
+        # Split study hours into start and end
+        lat_long = form_data.study_hours.split("-")
+        form_data.study_hours_start = int(lat_long[0])
+        form_data.study_hours_end = int(lat_long[1])
+
         # Preprocess the form data
         preprocessed_data = {
             'gender': gender_mappings[form_data.gender],
@@ -154,13 +180,11 @@ def predict(form_data: FormData):
         for resource in resources_used:
             preprocessed_data[resource] = 1 if resource in form_data.resources_used else 0
 
-        # Convert to DataFrame
-        form_df = pd.DataFrame([preprocessed_data])
+        # Convert to DataFrame with specified column order
+        form_df = pd.DataFrame([preprocessed_data], columns=column_order)
 
         # Predict using the best decision tree model
         prediction = best_dt.predict(form_df)
-
-        
 
         if prediction[0] == 1:
             return {"Predicted 1Y_avg": "Low"}
